@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import re
 import secrets
 import time
@@ -96,3 +97,43 @@ class SessionRateLimiter:
                     detail="Слишком много действий. Подождите минуту.",
                 )
             events.append(now)
+
+
+def resolve_client_address(request: Request):
+    """Resolve an IP without trusting client-supplied proxy headers by default."""
+    peer_host = request.client.host if request.client else ""
+    try:
+        peer = ipaddress.ip_address(peer_host)
+    except ValueError:
+        return None
+
+    trusted = request.app.state.settings.trusted_proxy_networks_list
+    if not any(peer in network for network in trusted):
+        return peer
+
+    forwarded = request.headers.get("x-forwarded-for")
+    if not forwarded:
+        return None
+    try:
+        chain = [
+            ipaddress.ip_address(item.strip())
+            for item in forwarded.split(",")
+            if item.strip()
+        ]
+    except ValueError:
+        return None
+    if not chain:
+        return None
+
+    chain.append(peer)
+    while chain and any(chain[-1] in network for network in trusted):
+        chain.pop()
+    return chain[-1] if chain else None
+
+
+def admin_network_allows(request: Request) -> bool:
+    allowed = request.app.state.settings.admin_networks
+    if not allowed:
+        return True
+    client = resolve_client_address(request)
+    return client is not None and any(client in network for network in allowed)

@@ -365,6 +365,7 @@ def test_admin_queue_moderation_soft_deletes_post_and_writes_audit(
             "csrf_token": csrf(detail),
             "action": "delete",
             "reason": "Нарушение подтверждено",
+            "rule_version_id": "1",
         },
         follow_redirects=False,
     )
@@ -374,7 +375,7 @@ def test_admin_queue_moderation_soft_deletes_post_and_writes_audit(
         assert db.get(Report, 1).status == "resolved"
         assert db.scalar(select(func.count(ModerationAudit.id))) == 1
     assert "Контент для проверки" not in client.get("/").text
-    assert "[пост удалён оператором]" in client.get(f"/posts/{post_id}").text
+    assert "Пост удалён модерацией" in client.get(f"/posts/{post_id}").text
     audit = client.get("/admin/audit")
     assert "Нарушение подтверждено" in audit.text
 
@@ -402,10 +403,15 @@ def test_soft_deleted_comment_preserves_child_branch(
     detail = client.get("/admin/reports/1")
     client.post(
         "/admin/reports/1/action",
-        data={"csrf_token": csrf(detail), "action": "delete", "reason": ""},
+        data={
+            "csrf_token": csrf(detail),
+            "action": "delete",
+            "reason": "Подтверждённая угроза",
+            "rule_version_id": "1",
+        },
     )
     page = client.get(f"/posts/{post_id}")
-    assert "[комментарий удалён]" in page.text
+    assert "Комментарий удалён модерацией" in page.text
     assert "Дочерний ответ" in page.text
     assert f'id="comment-{child_id}"' in page.text
 
@@ -493,8 +499,12 @@ def test_tampered_session_cookie_is_rejected(client):
     register(client)
     cookie = client.cookies.get("opinion_session")
     assert cookie
-    replacement = "A" if cookie[-1] != "A" else "B"
-    client.cookies.set("opinion_session", cookie[:-1] + replacement)
+    parts = cookie.split(".")
+    signature = parts[-1]
+    index = len(signature) // 2
+    replacement = "A" if signature[index] != "A" else "B"
+    parts[-1] = signature[:index] + replacement + signature[index + 1 :]
+    client.cookies.set("opinion_session", ".".join(parts))
     response = client.get("/me", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/login"

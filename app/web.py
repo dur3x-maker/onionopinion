@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.avatars import delete_avatar_file, process_avatar
 from app.database import get_db
-from app.models import Comment, Post, Report, User
+from app.models import Comment, ModerationDecision, Post, Report, RuleVersion, User
+from app.moderation import active_decision_map, active_rule_versions, decision_context_url
 from app.security import (
     hash_password,
     require_csrf,
@@ -171,6 +172,11 @@ def post_detail(request: Request, post_id: int, db: Session = Depends(get_db)):
         comment_tree=build_comment_tree(comments),
         comment_count=sum(not comment.is_deleted for comment in comments),
         comment_max_length=request.app.state.settings.comment_max_length,
+        comment_action=f"/posts/{post.id}/comments",
+        post_decision=active_decision_map(db, "post", [post.id]).get(post.id),
+        moderation_notices=active_decision_map(
+            db, "comment", [comment.id for comment in comments if comment.is_deleted]
+        ),
     )
 
 
@@ -458,6 +464,11 @@ def report_form(
         target_type=target_type,
         target_id=target_id,
         post_id=post_id,
+        return_url=(
+            f"/posts/{post_id}"
+            if post_id
+            else f"/moderation/decisions/{target.moderation_decision_id}"
+        ),
     )
 
 
@@ -490,7 +501,11 @@ def create_report(
         if not comment or comment.is_deleted:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Комментарий не найден.")
         report = Report(post_id=None, comment_id=comment.id, **common)
-        return_to = f"/posts/{comment.post_id}#comment-{comment.id}"
+        return_to = (
+            f"/posts/{comment.post_id}#comment-{comment.id}"
+            if comment.post_id
+            else f"/moderation/decisions/{comment.moderation_decision_id}#comment-{comment.id}"
+        )
     else:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Некорректная цель."
@@ -508,4 +523,89 @@ def rules(request: Request, db: Session = Depends(get_db)):
         "rules.html",
         title="Правила",
         current_user=current_user(request, db),
+        rule_versions=active_rule_versions(db),
+    )
+
+
+@router.get("/moderation/decisions/{decision_id}")
+def public_moderation_decision(
+    request: Request, decision_id: int, db: Session = Depends(get_db)
+):
+    decision = db.scalar(
+        select(ModerationDecision)
+        .where(ModerationDecision.id == decision_id)
+        .options(
+            joinedload(ModerationDecision.rule_version).joinedload(RuleVersion.rule)
+        )
+    )
+    if not decision:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Решение модерации не найдено.")
+    comments = list(
+        db.scalars(
+            select(Comment)
+            .where(Comment.moderation_decision_id == decision.id)
+            .options(joinedload(Comment.author))
+            .order_by(Comment.created_at, Comment.id)
+        )
+    )
+    return render(
+        request,
+        "moderation_decision.html",
+        title=f"Решение модерации #{decision.id}",
+        current_user=current_user(request, db),
+        decision=decision,
+        context_url=decision_context_url(db, decision),
+        comment_tree=build_comment_tree(comments),
+        comment_count=sum(not comment.is_deleted for comment in comments),
+        comment_max_length=request.app.state.settings.comment_max_length,
+        comment_action=f"/moderation/decisions/{decision.id}/comments",
+        moderation_notices=active_decision_map(
+            db, "comment", [comment.id for comment in comments if comment.is_deleted]
+        ),
+    )
+
+
+@router.post("/moderation/decisions/{decision_id}/comments")
+def create_decision_comment(
+    request: Request,
+    decision_id: int,
+    body: Annotated[str, Form()],
+    csrf_token: Annotated[str, Form()],
+    parent_id: Annotated[int | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    require_csrf(request, csrf_token)
+    require_rate_limit(request, "publish")
+    decision = db.get(ModerationDecision, decision_id)
+    if not decision:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Решение модерации не найдено.")
+    if parent_id is not None:
+        parent = db.get(Comment, parent_id)
+        if not parent or parent.moderation_decision_id != decision.id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Некорректный ответ.")
+        validate_comment_depth(db, parent, request.app.state.settings.max_comment_depth)
+    body = clean_body(body, request.app.state.settings.comment_max_length, "Комментарий")
+    comment = Comment(
+        post_id=None,
+        moderation_decision_id=decision.id,
+        parent_id=parent_id,
+        body=body,
+        **author_fields(request, current_user(request, db)),
+    )
+    db.add(comment)
+    db.commit()
+    return RedirectResponse(
+        f"/moderation/decisions/{decision.id}#comment-{comment.id}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.get("/addresses")
+def official_addresses(request: Request, db: Session = Depends(get_db)):
+    return render(
+        request,
+        "addresses.html",
+        title="Актуальные адреса",
+        current_user=current_user(request, db),
+        addresses=request.app.state.settings.official_addresses,
     )

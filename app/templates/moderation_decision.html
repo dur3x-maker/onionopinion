@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_comments.html" import comment_branch with context %}
+{% block content %}
+<div class="back-link">
+    {% if context_url %}<a href="{{ context_url }}">← Исходный контекст</a>{% else %}<a href="/">← В ленту</a>{% endif %}
+</div>
+<article class="card decision-card">
+    <div class="decision-heading">
+        <div>
+            <p class="eyebrow">Публичное решение #{{ decision.id }} · {{ decision.target_type }} #{{ decision.target_id }}</p>
+            <h1>{{ decision.rule_version.rule.code }} — {{ decision.rule_version.title }}</h1>
+        </div>
+        <span class="status-badge status-{{ decision.status }}">{{ decision.status }}</span>
+    </div>
+    {% if decision.status == "reversed" %}
+        <div class="notice success-notice"><strong>Решение отменено.</strong> Исходный контент восстановлен.</div>
+    {% endif %}
+    <dl class="moderation-meta">
+        <div><dt>Объект</dt><dd>{{ decision.target_type }} #{{ decision.target_id }}</dd></div>
+        <div><dt>Дата решения</dt><dd>{{ decision.created_at|datetime }}</dd></div>
+        <div><dt>Версия правила</dt><dd>{{ decision.rule_version.rule.code }} · версия {{ decision.rule_version.version }}</dd></div>
+        <div><dt>Статус</dt><dd>{{ decision.status }}</dd></div>
+    </dl>
+    <h2>Текст правила на момент решения</h2>
+    <p>{{ decision.rule_version.text }}</p>
+    <h2>Почему правило применено</h2>
+    <p class="user-text">{{ decision.explanation }}</p>
+</article>
+
+<section class="card review-history">
+    <h2>История статуса</h2>
+    <ol>
+        <li><time datetime="{{ decision.created_at.isoformat() }}">{{ decision.created_at|datetime }}</time> — решение создано, контент скрыт.</li>
+        {% for review in decision.reviews %}
+            <li><time datetime="{{ review.created_at.isoformat() }}">{{ review.created_at|datetime }}</time> — решение отменено, контент восстановлен.{% if review.explanation %} {{ review.explanation }}{% endif %}</li>
+        {% endfor %}
+    </ol>
+</section>
+
+<section class="discussion decision-discussion">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Отдельное публичное обсуждение</p>
+            <h2>Обсуждение решения <span class="count">{{ comment_count }}</span></h2>
+            <p>Решение и администрацию можно критиковать. Сама критика не является нарушением.</p>
+        </div>
+    </div>
+    <form action="{{ comment_action }}" method="post" class="card comment-composer">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="decision-comment-body">Комментарий к решению</label>
+        <textarea id="decision-comment-body" name="body" maxlength="{{ comment_max_length }}" rows="4" required></textarea>
+        <div class="composer-footer">
+            <span class="identity-note">{% if current_user %}от <strong>{{ current_user.display_name }}</strong>{% else %}как <strong>{{ anonymous_alias }}</strong>{% endif %}</span>
+            <button type="submit" class="button primary">Комментировать</button>
+        </div>
+    </form>
+    {% if comment_tree %}
+        <div class="comments" aria-label="Комментарии к решению">
+        {% for node in comment_tree %}{{ comment_branch(node) }}{% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state"><p>Обсуждение ещё не началось.</p></div>
+    {% endif %}
+</section>
+{% endblock %}

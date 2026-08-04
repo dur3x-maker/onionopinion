@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Comment, User
-from app.security import get_anonymous_alias, get_anonymous_avatar
+from app.security import admin_network_allows, get_anonymous_alias, get_anonymous_avatar
 
 
 @dataclass
@@ -95,6 +95,8 @@ def require_user(request: Request, db: Session) -> User:
 
 
 def require_admin(request: Request, db: Session) -> User:
+    if not admin_network_allows(request):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Страница не найдена.")
     user = require_user(request, db)
     if not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Доступ только для оператора.")

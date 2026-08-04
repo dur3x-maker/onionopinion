@@ -33,7 +33,11 @@
                 <article class="card mini-comment">
                     <div class="user-text">{{ comment.body }}</div>
                     <div class="post-actions">
-                        <a href="/posts/{{ comment.post_id }}#comment-{{ comment.id }}">Перейти к обсуждению</a>
+                        {% if comment.post_id %}
+                            <a href="/posts/{{ comment.post_id }}#comment-{{ comment.id }}">Перейти к обсуждению</a>
+                        {% else %}
+                            <a href="/moderation/decisions/{{ comment.moderation_decision_id }}#comment-{{ comment.id }}">Перейти к обсуждению решения</a>
+                        {% endif %}
                         <time datetime="{{ comment.created_at.isoformat() }}">{{ comment.created_at|datetime }}</time>
                     </div>
                 </article>

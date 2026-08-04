@@ -1,8 +1,12 @@
 .git
-.env
+.env*
 .venv
 __pycache__
 .pytest_cache
 *.pyc
+*.db
+*.sqlite
+*.sqlite3
+*.log
 tests
 data

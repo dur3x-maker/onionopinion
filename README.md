@@ -67,16 +67,63 @@ docker compose exec app python -m app.cli create-admin `
 Анонимы не загружают файлы. Случайный CSS-аватар сохраняется вместе с их
 случайным псевдонимом только для визуального различения участников.
 
-## Модерация
+## Прозрачная модерация
 
-Жалобы попадают в очередь `/admin`. Оператор может оставить публикацию,
-soft-delete её или закрыть жалобу. Каждое решение записывается в отдельный
-`moderation_audit`, содержащий только оператора, действие, объект, время и
-необязательную заметку — без IP и обычной пользовательской активности.
+Принцип площадки: модерируются запрещённые действия и контент, а не мнения.
+Политические взгляды, критика власти или администрации, критика правил и мат сами
+по себе не являются основанием удаления.
 
-При soft delete комментарий остаётся узлом дерева с текстом
-`[комментарий удалён]`; дочерние ответы сохраняются. Удалённый пост исключается
-из ленты и профиля, но его прямая ссылка и существующая ветка остаются доступны.
+Действующие правила хранятся как стабильный `Rule` (`R1`, `R2`...) и неизменяемые
+`RuleVersion`. Новое содержание правила создаётся отдельной версией:
+
+```powershell
+docker compose exec app python -m app.cli add-rule-version `
+  --code R2 `
+  --title "Уточнённое название" `
+  --text "Новый полный текст правила"
+```
+
+Старая версия остаётся read-only. Только текущую версию активного правила можно
+выбрать для нового решения.
+
+Жалобы попадают в `/admin`. Для soft delete оператор обязан выбрать конкретную
+действующую `RuleVersion` и дать короткое публичное пояснение. Сервер создаёт один
+`ModerationDecision` на активный объект и одновременно закрывает связанные новые
+жалобы. Уникальный active-target ключ защищает от дубликатов при повторной обработке.
+
+Удалённый узел сохраняет исходный текст в БД и публично показывает правило,
+пояснение, дату и ссылку на `/moderation/decisions/{id}`. Страница решения содержит
+исторический текст правила и отдельное древовидное обсуждение на том же comment
+engine. Анонимные и зарегистрированные пользователи могут критиковать решение без
+JavaScript. Login оператора публично не выводится.
+
+Оператор может отменить решение. Тогда создаётся `ModerationReview`, контент и
+ветка восстанавливаются, а первоначальное решение, RuleVersion и публичная история
+сохраняются. Внутренний `moderation_audit` знает реальные operator accounts, но не IP.
+
+## Защита `/admin`
+
+Role-based login/password остаётся обязательным. Опциональный сетевой барьер
+задаётся только окружением:
+
+```dotenv
+ADMIN_ALLOWED_NETWORKS=192.0.2.10/32,2001:db8:1234::/48
+TRUSTED_PROXY_NETWORKS=172.20.0.0/24
+```
+
+Это documentation ranges, а не production-значения. Если
+`ADMIN_ALLOWED_NETWORKS` пуст, дополнительная проверка выключена. Если задана —
+доступ требует одновременно актуальной admin-сессии и попадания client address в
+CIDR. Отказ по сети возвращает нейтральный 404 и не публикует конфигурацию.
+
+Uvicorn запущен с `--no-proxy-headers`. Приложение игнорирует `Forwarded`,
+`X-Real-IP` и `X-Forwarded-For` от недоверенного TCP peer. Для peer из
+`TRUSTED_PROXY_NETWORKS` разбирается только `X-Forwarded-For`: доверенные proxy hops
+снимаются справа, а ближайший оставшийся адрес считается клиентом. Все реальные
+proxy hops должны быть перечислены; отсутствующая или некорректная цепочка
+отклоняется. Сети `/0` запрещены, чтобы клиент не мог объявить себя доверенным proxy.
+IP используется только в памяти для access control, не пишется в БД, audit или
+application logs.
 
 ## Локальная разработка
 
@@ -91,9 +138,40 @@ alembic upgrade head
 uvicorn app.main:app --reload --no-access-log
 ```
 
-Для HTTPS/Onion Service установите `COOKIE_SECURE=true`, задайте реальные хосты
-в `ALLOWED_HOSTS` и новый `SECRET_KEY`. Production nginx/Tor deployment относится
-к третьей итерации.
+## Production configuration
+
+Перед публичным запуском задайте минимум:
+
+| Переменная | Требование |
+|---|---|
+| `ENVIRONMENT` | `production`; включает строгую проверку конфигурации и HSTS |
+| `SECRET_KEY` | новый случайный секрет длиной 32+; placeholder/test значения отклоняются |
+| `DATABASE_URL` | PostgreSQL URL с отдельным сильным паролем, без default credentials |
+| `POSTGRES_PASSWORD` | тот же сильный пароль для текущего Compose-варианта |
+| `COOKIE_SECURE` | `true` в production; cookie также HttpOnly и SameSite=Lax |
+| `ALLOWED_HOSTS` | все реальные clearnet/onion hostnames через запятую, без `*` |
+| `ADMIN_ALLOWED_NETWORKS` | production admin IP/CIDR, если сетевой барьер включён |
+| `TRUSTED_PROXY_NETWORKS` | только фактические сети reverse proxy |
+| `AVATAR_STORAGE_DIR` | постоянный writable-каталог; в Compose это `/data/avatars` |
+| `OFFICIAL_CLEARNET_URL` | реальный официальный HTTPS URL либо пусто |
+| `OFFICIAL_ONION_URL` | реальный v3 `.onion` HTTP(S) URL либо пусто |
+
+Дополнительно доступны `AVATAR_MAX_BYTES`, `ALLOWED_HOSTS`, лимиты текста и rate
+limit из `app/config.py`. Ненастроенные официальные адреса не заменяются фиктивными;
+страница `/addresses` показывает только значения окружения.
+
+Предполагаемая следующая схема — две точки входа (clearnet и Onion Service) через
+reverse proxy к **одному** backend и **одной** PostgreSQL. Отдельные users/content DB
+не нужны. Tor, nginx, TLS и `.onion` этим репозиторием сейчас не устанавливаются.
+
+Перед запуском нужно отдельно:
+
+- настроить TLS для clearnet, Tor Onion Service и persistent onion keys;
+- указать реальные hostnames, proxy CIDR, admin CIDR и официальные адреса;
+- проверить ownership/permissions постоянного avatar volume;
+- настроить регулярные проверяемые backups PostgreSQL и avatar volume, retention и restore drill;
+- ограничить доступ к PostgreSQL, не публиковать app-порт напрямую и проверить firewall;
+- применить `alembic upgrade head`, затем проверить `/healthz` и operator flow.
 
 ## Тесты
 
@@ -111,12 +189,13 @@ PostgreSQL и рабочие media-файлы они не затрагивают
 app/
   admin.py        operator routes, moderation and audit
   avatars.py      validation, crop and safe WebP encoding
-  cli.py          management command for the first admin
+  cli.py          first-admin and immutable rule-version commands
   config.py       environment configuration
   database.py     SQLAlchemy engine and sessions
-  models.py       User, Post, Comment, Report, ModerationAudit
-  security.py     Argon2id, CSRF and session-based rate limiting
-  services.py     identities, authorization and safe comment tree
+  models.py       content, reports, versioned rules, decisions and reviews
+  moderation.py   rule validation, idempotent delete, notices and reversal
+  security.py     Argon2id, CSRF, rate limiting and trusted client IP resolution
+  services.py     identities, authorization and shared safe comment tree
   web.py          public SSR routes and forms
   main.py         application, middleware and security headers
   templates/      Jinja2 templates
@@ -137,6 +216,10 @@ tests/            integration and security regression tests
   привилегии.
 - Роль администратора всегда читается из БД, а не из cookie.
 - Лимитер использует случайный ключ сессии, не IP.
+- Production-конфигурация отклоняет weak secret, insecure cookie, localhost/wildcard
+  hosts и SQLite/default database credentials.
+- Request body ограничен до multipart parsing; аватары дополнительно проверяются
+  по MIME, сигнатуре, пикселям и итоговому формату.
 
 Подписанная cookie не шифруется, поэтому в неё помещаются только случайные
 технические идентификаторы, user id и версия сессии — не пароль, login или
@@ -151,4 +234,9 @@ tests/            integration and security regression tests
   безопасное ограничение текущей версии.
 - Нет восстановления пароля, банов, поиска, сообщений, голосований и уведомлений.
 - Приложение минимизирует данные, но не обещает абсолютную анонимность.
-- Production nginx/Tor hardening и `.onion` deployment запланированы отдельно.
+- Встроенный limiter сессионный: он снижает случайный abuse, но не заменяет
+  edge-level anti-DoS/rate limiting перед публичным сервисом.
+- `RuleVersion` неизменяем на уровне ORM и не имеет update endpoint; доступ к БД
+  всё равно должен быть ограничен доверенными операторами.
+- Production reverse proxy/Tor hardening, TLS, backups и `.onion` deployment —
+  отдельный следующий инфраструктурный этап.

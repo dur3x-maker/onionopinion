@@ -1,5 +1,6 @@
 {% macro comment_branch(node, depth=1) %}
     {% from "_avatar.html" import avatar with context %}
+    {% from "_moderation_notice.html" import moderation_notice with context %}
     {% set comment = node.comment %}
     {% set visual_depth = 5 if depth > 5 else depth %}
     <details class="comment depth-{{ visual_depth }}" id="comment-{{ comment.id }}" open>
@@ -19,14 +20,14 @@
         </summary>
         <div class="comment-content">
             {% if comment.is_deleted %}
-                <div class="deleted-placeholder">[комментарий удалён]</div>
+                {{ moderation_notice(moderation_notices.get(comment.id), "Комментарий") }}
             {% else %}
                 <div class="user-text">{{ comment.body }}</div>
             {% endif %}
             <div class="comment-actions">
                 <details class="reply-control">
                     <summary>Ответить</summary>
-                    <form action="/posts/{{ post.id }}/comments" method="post" class="compact-form">
+                    <form action="{{ comment_action }}" method="post" class="compact-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <input type="hidden" name="parent_id" value="{{ comment.id }}">
                         <label for="reply-{{ comment.id }}">Ваш ответ</label>

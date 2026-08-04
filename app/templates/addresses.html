@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<article class="prose card">
+    <p class="eyebrow">Проверяемые точки входа</p>
+    <h1>Актуальные адреса</h1>
+    <p>Здесь публикуются официальные адреса OpinionOnion из конфигурации оператора.</p>
+    {% if addresses %}
+        <dl class="address-list">
+        {% for category, url in addresses %}
+            <div><dt>{{ category }}</dt><dd><a href="{{ url }}" rel="noreferrer">{{ url }}</a></dd></div>
+        {% endfor %}
+        </dl>
+    {% else %}
+        <div class="notice muted-notice">Адреса пока не настроены. Фальшивые placeholder-адреса не публикуются.</div>
+    {% endif %}
+</article>
+{% endblock %}

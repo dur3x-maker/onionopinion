@@ -1,4 +1,5 @@
 {% from "_avatar.html" import avatar with context %}
+{% from "_moderation_notice.html" import moderation_notice with context %}
 <article class="card post-card{% if post.is_deleted %} deleted-content{% endif %}">
     <div class="post-meta">
         {{ avatar(post.author, post.author_alias, post.author_avatar) }}
@@ -12,7 +13,7 @@
         </div>
     </div>
     {% if post.is_deleted %}
-        <div class="deleted-placeholder">[пост удалён оператором]</div>
+        {{ moderation_notice(post_decision if post_decision is defined else none, "Пост") }}
     {% else %}
         <div class="user-text">{{ post.body }}</div>
     {% endif %}

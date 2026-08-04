@@ -114,6 +114,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     app = FastAPI(
         title=settings.app_name,
+        debug=False,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -167,6 +168,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        if settings.environment == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
         if response.headers.get("content-type", "").startswith("text/html"):
             response.headers["Cache-Control"] = "no-store"
         return response

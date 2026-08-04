@@ -1,0 +1,17 @@
+{% macro moderation_notice(decision, label) %}
+<aside class="moderation-notice" aria-label="Уведомление модерации">
+    <div class="moderation-notice-top">
+        <strong>{{ label }} удалён модерацией</strong>
+        <span class="status-badge status-active">active</span>
+    </div>
+    {% if decision %}
+        <p><span class="rule-badge">{{ decision.rule_version.rule.code }}</span>
+            {{ decision.rule_version.title }} · версия {{ decision.rule_version.version }}</p>
+        <p>{{ decision.explanation }}</p>
+        <time datetime="{{ decision.created_at.isoformat() }}">{{ decision.created_at|datetime }}</time>
+        <a href="/moderation/decisions/{{ decision.id }}">Подробнее и обсуждение решения</a>
+    {% else %}
+        <p>Историческое основание пока недоступно.</p>
+    {% endif %}
+</aside>
+{% endmacro %}

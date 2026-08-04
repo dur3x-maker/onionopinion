@@ -6,10 +6,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import desc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Comment, ModerationAudit, Post, Report
+from app.models import Comment, ModerationAudit, ModerationDecision, Post, Report, RuleVersion
+from app.moderation import (
+    active_rule_versions,
+    create_decision,
+    decision_context_url,
+    reverse_decision,
+)
 from app.security import require_csrf
 from app.services import require_admin
 
@@ -28,6 +35,10 @@ def report_options():
     return (
         joinedload(Report.post).joinedload(Post.author),
         joinedload(Report.comment).joinedload(Comment.author),
+        joinedload(Report.comment).joinedload(Comment.post),
+        joinedload(Report.decision)
+        .joinedload(ModerationDecision.rule_version)
+        .joinedload(RuleVersion.rule),
     )
 
 
@@ -88,6 +99,12 @@ def report_detail(
         target=target,
         post=post,
         parent_context=parent_context,
+        rule_versions=active_rule_versions(db),
+        context_url=(
+            f"/posts/{post.id}{f'#comment-{report.comment_id}' if report.comment_id else ''}"
+            if post
+            else f"/moderation/decisions/{report.comment.moderation_decision_id}#comment-{report.comment.id}"
+        ),
     )
 
 
@@ -98,11 +115,12 @@ def moderate_report(
     action: Annotated[str, Form()],
     csrf_token: Annotated[str, Form()],
     reason: Annotated[str, Form()] = "",
+    rule_version_id: Annotated[int | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
+    operator = require_admin(request, db)
     require_csrf(request, csrf_token)
     request.app.state.limiter.check(request, "admin")
-    operator = require_admin(request, db)
     report = db.scalar(select(Report).where(Report.id == report_id).with_for_update())
     if not report:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Жалоба не найдена.")
@@ -118,27 +136,73 @@ def moderate_report(
     if not target:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Объект жалобы не найден.")
     now = datetime.now(timezone.utc)
-    if action == "delete" and not target.is_deleted:
-        target.deleted_at = now
-        target.deleted_by_id = operator.id
-    report.status = "dismissed" if action == "dismiss" else "resolved"
-    report.resolution_action = action
-    report.resolved_at = now
-    report.resolved_by_id = operator.id
-    db.add(
-        ModerationAudit(
-            operator_id=operator.id,
-            report_id=report.id,
-            action=action,
-            target_type=report.target_type,
-            target_id=report.target_id,
-            reason=reason or None,
+    if action == "delete":
+        try:
+            decision, created = create_decision(
+                db,
+                target_type=report.target_type,
+                target_id=report.target_id,
+                rule_version_id=rule_version_id,
+                moderator=operator,
+                explanation=reason,
+                report_id=report.id,
+            )
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Для объекта уже существует активное решение.",
+            ) from exc
+        request.session["notice"] = (
+            "Решение создано и связанные жалобы обработаны."
+            if created
+            else "Связанное решение уже существовало; жалоба обработана идемпотентно."
         )
-    )
-    db.commit()
-    request.session["notice"] = "Решение сохранено в журнале модерации."
+    else:
+        report.status = "dismissed" if action == "dismiss" else "resolved"
+        report.resolution_action = action
+        report.resolved_at = now
+        report.resolved_by_id = operator.id
+        db.add(
+            ModerationAudit(
+                operator_id=operator.id,
+                report_id=report.id,
+                action=action,
+                target_type=report.target_type,
+                target_id=report.target_id,
+                reason=reason or None,
+            )
+        )
+        db.commit()
+        request.session["notice"] = "Решение сохранено в журнале модерации."
     return RedirectResponse(
         f"/admin/reports/{report.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.post("/decisions/{decision_id}/reverse")
+def reverse_moderation_decision(
+    request: Request,
+    decision_id: int,
+    csrf_token: Annotated[str, Form()],
+    reason: Annotated[str, Form()] = "",
+    db: Session = Depends(get_db),
+):
+    operator = require_admin(request, db)
+    require_csrf(request, csrf_token)
+    request.app.state.limiter.check(request, "admin")
+    decision = reverse_decision(
+        db,
+        decision_id=decision_id,
+        reviewer=operator,
+        explanation=reason,
+    )
+    db.commit()
+    request.session["notice"] = "Решение отменено, исходный контент восстановлен."
+    return RedirectResponse(
+        f"/moderation/decisions/{decision.id}",
+        status_code=status.HTTP_303_SEE_OTHER,
     )
 
 

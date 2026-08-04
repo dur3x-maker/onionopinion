@@ -9,19 +9,23 @@
     <p class="eyebrow">Жалоба #{{ report.id }} · {{ report.target_type }}</p>
     <h1>{{ report.reason }}</h1>
     <dl class="moderation-meta">
-        <div><dt>Объект</dt><dd><a href="/posts/{{ post.id }}{% if report.comment_id %}#comment-{{ report.comment_id }}{% endif %}">{{ report.target_type }} #{{ report.target_id }}</a></dd></div>
+        <div><dt>Объект</dt><dd><a href="{{ context_url }}">{{ report.target_type }} #{{ report.target_id }}</a></dd></div>
         <div><dt>Автор</dt><dd>{{ target.author_name }}</dd></div>
     </dl>
 </section>
 
 <section class="moderation-context">
     <h2>Контекст публикации</h2>
-    <article class="card context-card">
-        <strong>Пост #{{ post.id }}</strong>
-        <div class="{% if post.is_deleted %}deleted-placeholder{% else %}user-text{% endif %}">
-            {{ "[пост удалён]" if post.is_deleted else post.body }}
-        </div>
-    </article>
+    {% if post %}
+        <article class="card context-card">
+            <strong>Пост #{{ post.id }}</strong>
+            <div class="{% if post.is_deleted %}deleted-placeholder{% else %}user-text{% endif %}">
+                {{ "[пост удалён]" if post.is_deleted else post.body }}
+            </div>
+        </article>
+    {% else %}
+        <p class="notice muted-notice">Комментарий относится к публичному обсуждению решения модерации.</p>
+    {% endif %}
     {% for parent in parent_context %}
         <article class="card context-card context-child">
             <strong>{{ parent.author_name }}</strong>
@@ -46,8 +50,17 @@
     <form action="/admin/reports/{{ report.id }}/action" method="post" class="stacked-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label>
-            Короткая заметка <small>необязательно, попадёт только в audit log</small>
+            Пояснение применения правила <small>публично для действия «Удалить»</small>
             <input name="reason" maxlength="300">
+        </label>
+        <label>
+            Действующая версия правила
+            <select name="rule_version_id">
+                <option value="">Выберите правило для удаления</option>
+                {% for version in rule_versions %}
+                    <option value="{{ version.id }}">{{ version.rule.code }} — {{ version.title }} (v{{ version.version }})</option>
+                {% endfor %}
+            </select>
         </label>
         <div class="action-row">
             <button class="button" name="action" value="keep" type="submit">Оставить контент</button>
@@ -58,5 +71,19 @@
 </section>
 {% else %}
 <div class="notice">Обработано: {{ report.resolution_action }} · {{ report.resolved_at|datetime }}</div>
+{% if report.decision %}
+<section class="card moderation-actions">
+    <h2>Структурированное решение</h2>
+    <p><a href="/moderation/decisions/{{ report.decision.id }}">{{ report.decision.rule_version.rule.code }} — {{ report.decision.rule_version.title }}</a>
+        · <span class="status-badge status-{{ report.decision.status }}">{{ report.decision.status }}</span></p>
+    {% if report.decision.status == "active" %}
+    <form action="/admin/decisions/{{ report.decision.id }}/reverse" method="post" class="stacked-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>Причина пересмотра <input name="reason" maxlength="300"></label>
+        <button class="button" type="submit">Отменить решение и восстановить контент</button>
+    </form>
+    {% endif %}
+</section>
+{% endif %}
 {% endif %}
 {% endblock %}

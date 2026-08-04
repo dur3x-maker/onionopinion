@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import Settings
 from app.database import Base, get_db
 from app.main import create_app
+from app.models import Rule, RuleVersion
 
 
 @pytest.fixture
@@ -23,6 +24,20 @@ def db_session_factory():
     )
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with factory() as db:
+        rule = Rule(code="R1", is_active=True)
+        db.add(rule)
+        db.flush()
+        version = RuleVersion(
+            rule_id=rule.id,
+            version=1,
+            title="Реальные угрозы насилия",
+            text="Запрещены конкретные угрозы причинить физический вред.",
+        )
+        db.add(version)
+        db.flush()
+        rule.current_version_id = version.id
+        db.commit()
     yield factory
     Base.metadata.drop_all(engine)
     engine.dispose()
