@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="back-link"><a href="/admin">← Вернуться к очереди</a></div>
+<section class="card admin-detail">
+    <div class="report-card-top">
+        <span class="status-badge status-{{ report.status }}">{{ report.status }}</span>
+        <time datetime="{{ report.created_at.isoformat() }}">{{ report.created_at|datetime }}</time>
+    </div>
+    <p class="eyebrow">Жалоба #{{ report.id }} · {{ report.target_type }}</p>
+    <h1>{{ report.reason }}</h1>
+    <dl class="moderation-meta">
+        <div><dt>Объект</dt><dd><a href="/posts/{{ post.id }}{% if report.comment_id %}#comment-{{ report.comment_id }}{% endif %}">{{ report.target_type }} #{{ report.target_id }}</a></dd></div>
+        <div><dt>Автор</dt><dd>{{ target.author_name }}</dd></div>
+    </dl>
+</section>
+
+<section class="moderation-context">
+    <h2>Контекст публикации</h2>
+    <article class="card context-card">
+        <strong>Пост #{{ post.id }}</strong>
+        <div class="{% if post.is_deleted %}deleted-placeholder{% else %}user-text{% endif %}">
+            {{ "[пост удалён]" if post.is_deleted else post.body }}
+        </div>
+    </article>
+    {% for parent in parent_context %}
+        <article class="card context-card context-child">
+            <strong>{{ parent.author_name }}</strong>
+            <div class="{% if parent.is_deleted %}deleted-placeholder{% else %}user-text{% endif %}">
+                {{ "[комментарий удалён]" if parent.is_deleted else parent.body }}
+            </div>
+        </article>
+    {% endfor %}
+    {% if report.comment_id %}
+        <article class="card context-card target-context">
+            <strong>{{ target.author_name }} · объект жалобы</strong>
+            <div class="{% if target.is_deleted %}deleted-placeholder{% else %}user-text{% endif %}">
+                {{ "[комментарий удалён]" if target.is_deleted else target.body }}
+            </div>
+        </article>
+    {% endif %}
+</section>
+
+{% if report.status == "new" %}
+<section class="card moderation-actions">
+    <h2>Решение</h2>
+    <form action="/admin/reports/{{ report.id }}/action" method="post" class="stacked-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>
+            Короткая заметка <small>необязательно, попадёт только в audit log</small>
+            <input name="reason" maxlength="300">
+        </label>
+        <div class="action-row">
+            <button class="button" name="action" value="keep" type="submit">Оставить контент</button>
+            <button class="button danger" name="action" value="delete" type="submit">Удалить контент</button>
+            <button class="button subtle" name="action" value="dismiss" type="submit">Закрыть жалобу</button>
+        </div>
+    </form>
+</section>
+{% else %}
+<div class="notice">Обработано: {{ report.resolution_action }} · {{ report.resolved_at|datetime }}</div>
+{% endif %}
+{% endblock %}

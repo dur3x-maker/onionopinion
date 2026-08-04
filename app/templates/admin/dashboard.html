@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="admin-header">
+    <div>
+        <p class="eyebrow">Минимальная модерация</p>
+        <h1>Панель оператора</h1>
+    </div>
+    <a class="button subtle" href="/admin/audit">Журнал действий</a>
+</section>
+<nav class="sort-tabs admin-tabs" aria-label="Очередь жалоб">
+    <a href="/admin?queue=new" {% if queue == "new" %}aria-current="page"{% endif %}>Новые</a>
+    <a href="/admin?queue=processed" {% if queue != "new" %}aria-current="page"{% endif %}>Обработанные</a>
+</nav>
+<div class="report-list">
+    {% for report in reports %}
+        <article class="card admin-report-card">
+            <div class="report-card-top">
+                <span class="status-badge status-{{ report.status }}">{{ report.status }}</span>
+                <time datetime="{{ report.created_at.isoformat() }}">{{ report.created_at|datetime }}</time>
+            </div>
+            <h2>Жалоба #{{ report.id }} · {{ report.target_type }}</h2>
+            <p>{{ report.reason }}</p>
+            <a class="button subtle" href="/admin/reports/{{ report.id }}">Открыть контекст</a>
+        </article>
+    {% else %}
+        <div class="empty-state card">
+            <h2>Очередь пуста</h2>
+            <p>Новых жалоб сейчас нет.</p>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

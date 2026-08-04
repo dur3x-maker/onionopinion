@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="back-link"><a href="/posts/{{ post_id }}">← Вернуться к обсуждению</a></div>
+<section class="auth-card card report-page">
+    <p class="eyebrow">Сигнал оператору</p>
+    <h1>Пожаловаться</h1>
+    <p>Жалоба попадёт в очередь оператора и не удалит публикацию автоматически.</p>
+    <blockquote class="context-quote">
+        {% if target.is_deleted %}[публикация удалена]{% else %}{{ target.body }}{% endif %}
+    </blockquote>
+    <form action="/reports" method="post" class="stacked-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="target_type" value="{{ target_type }}">
+        <input type="hidden" name="target_id" value="{{ target_id }}">
+        <label>
+            Что нарушено?
+            <textarea name="reason" maxlength="300" rows="4" required placeholder="Кратко опишите проблему"></textarea>
+        </label>
+        <button class="button primary" type="submit">Отправить жалобу</button>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="auth-card card">
+    <p class="eyebrow">Постоянная личность</p>
+    <h1>Войти</h1>
+    <p>Логин нужен только для входа и нигде публично не показывается.</p>
+    {% if error %}<div class="form-error" role="alert">{{ error }}</div>{% endif %}
+    <form action="/login" method="post" class="stacked-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>
+            Логин
+            <input name="login" value="{{ login|default('') }}" minlength="3" maxlength="32"
+                   autocomplete="username" required>
+        </label>
+        <label>
+            Пароль
+            <input type="password" name="password" minlength="10" maxlength="128"
+                   autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="button primary">Войти</button>
+    </form>
+    <p class="auth-footnote">Нет аккаунта? <a href="/register">Зарегистрироваться</a></p>
+</section>
+{% endblock %}
+

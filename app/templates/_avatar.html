@@ -1,0 +1,10 @@
+{% macro avatar(user=None, alias=None, variant=None, large=False) %}
+    {% set classes = "avatar avatar-large" if large else "avatar" %}
+    {% if user and user.avatar_url %}
+        <img class="{{ classes }}" src="{{ user.avatar_url }}" alt="" width="{{ 72 if large else 40 }}" height="{{ 72 if large else 40 }}">
+    {% else %}
+        <span class="{{ classes }} {{ variant|default('default-avatar', true) }}" aria-hidden="true">
+            {{ (user.display_name if user else alias|default('?'))[:1]|upper }}
+        </span>
+    {% endif %}
+{% endmacro %}

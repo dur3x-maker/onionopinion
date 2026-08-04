@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_avatar.html" import avatar with context %}
+{% block content %}
+<section class="profile-header card">
+    {{ avatar(profile, large=True) }}
+    <div>
+        <p class="eyebrow">{% if is_owner %}Ваш профиль{% else %}Профиль{% endif %}</p>
+        <h1>{{ profile.display_name }}</h1>
+        <p>На площадке с {{ profile.created_at|datetime }}</p>
+        {% if is_owner %}<a class="button subtle settings-link" href="/settings">Настройки профиля</a>{% endif %}
+    </div>
+</section>
+
+<div class="profile-grid">
+    <section>
+        <div class="section-heading">
+            <h2>Посты <span class="count">{{ posts|length }}</span></h2>
+        </div>
+        <div class="post-list">
+            {% for post in posts %}
+                {% include "_post_card.html" %}
+            {% else %}
+                <div class="empty-state card"><p>Постов пока нет.</p></div>
+            {% endfor %}
+        </div>
+    </section>
+    <section>
+        <div class="section-heading">
+            <h2>Комментарии <span class="count">{{ comments|length }}</span></h2>
+        </div>
+        <div class="profile-comments">
+            {% for comment in comments %}
+                <article class="card mini-comment">
+                    <div class="user-text">{{ comment.body }}</div>
+                    <div class="post-actions">
+                        <a href="/posts/{{ comment.post_id }}#comment-{{ comment.id }}">Перейти к обсуждению</a>
+                        <time datetime="{{ comment.created_at.isoformat() }}">{{ comment.created_at|datetime }}</time>
+                    </div>
+                </article>
+            {% else %}
+                <div class="empty-state card"><p>Комментариев пока нет.</p></div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

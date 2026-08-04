@@ -1,0 +1,25 @@
+{% from "_avatar.html" import avatar with context %}
+<article class="card post-card{% if post.is_deleted %} deleted-content{% endif %}">
+    <div class="post-meta">
+        {{ avatar(post.author, post.author_alias, post.author_avatar) }}
+        <div>
+            {% if post.author %}
+                <a class="author" href="/users/{{ post.author.id }}">{{ post.author_name }}</a>
+            {% else %}
+                <span class="author anonymous">{{ post.author_name }}</span>
+            {% endif %}
+            <time datetime="{{ post.created_at.isoformat() }}">{{ post.created_at|datetime }}</time>
+        </div>
+    </div>
+    {% if post.is_deleted %}
+        <div class="deleted-placeholder">[пост удалён оператором]</div>
+    {% else %}
+        <div class="user-text">{{ post.body }}</div>
+    {% endif %}
+    <div class="post-actions">
+        <a href="/posts/{{ post.id }}">Обсуждение{% if comment_count is defined %} · {{ comment_count }}{% endif %}</a>
+        {% if not post.is_deleted %}
+            <a href="/reports/new?target_type=post&amp;target_id={{ post.id }}">Пожаловаться</a>
+        {% endif %}
+    </div>
+</article>

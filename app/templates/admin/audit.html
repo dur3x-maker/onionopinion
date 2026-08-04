@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="back-link"><a href="/admin">← Вернуться в панель</a></div>
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Только действия операторов</p>
+        <h1>Журнал модерации</h1>
+    </div>
+</section>
+<div class="audit-list">
+    {% for entry in entries %}
+        <article class="card audit-entry">
+            <div>
+                <strong>{{ entry.operator.display_name }}</strong>
+                <span>{{ entry.action }} · {{ entry.target_type }} #{{ entry.target_id }}</span>
+            </div>
+            <time datetime="{{ entry.created_at.isoformat() }}">{{ entry.created_at|datetime }}</time>
+            {% if entry.reason %}<p>{{ entry.reason }}</p>{% endif %}
+        </article>
+    {% else %}
+        <div class="empty-state card"><p>Административных действий ещё не было.</p></div>
+    {% endfor %}
+</div>
+{% endblock %}

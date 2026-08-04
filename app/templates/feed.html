@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero card">
+    <p class="eyebrow">Говори свободно</p>
+    <h1>О чём ты думаешь?</h1>
+    <p class="hero-copy">Тебе не нужно говорить, кто ты.</p>
+    <form action="/posts" method="post" class="composer">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="sr-only" for="post-body">Текст нового поста</label>
+        <textarea id="post-body" name="body" maxlength="{{ post_max_length }}" rows="5" required
+                  placeholder="Напишите свою мысль…"></textarea>
+        <div class="composer-footer">
+            <span class="identity-note">
+                {% if current_user %}
+                    Публикация от <strong>{{ current_user.display_name }}</strong>
+                {% else %}
+                    Публикация как <strong>{{ anonymous_alias }}</strong>
+                {% endif %}
+            </span>
+            <button type="submit" class="button primary">Опубликовать</button>
+        </div>
+    </form>
+</section>
+
+<section class="feed">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Публичная лента</p>
+            <h2>Мнения</h2>
+        </div>
+        <nav class="sort-tabs" aria-label="Сортировка ленты">
+            <a href="/?sort=new" {% if sort == "new" %}aria-current="page"{% endif %}>Новые</a>
+            <a href="/?sort=discussed" {% if sort == "discussed" %}aria-current="page"{% endif %}>Обсуждаемые</a>
+        </nav>
+    </div>
+
+    {% if posts %}
+        <div class="post-list">
+            {% for item in posts %}
+                {% set post = item.post %}
+                {% set comment_count = item.comment_count %}
+                {% include "_post_card.html" %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state card">
+            <h3>Здесь пока тихо</h3>
+            <p>Станьте первым, кто поделится мыслью.</p>
+        </div>
+    {% endif %}
+
+    {% if has_previous or has_next %}
+        <nav class="pagination" aria-label="Страницы ленты">
+            {% if has_previous %}
+                <a class="button subtle" href="/?sort={{ sort }}&page={{ page - 1 }}">← Назад</a>
+            {% else %}<span></span>{% endif %}
+            <span>Страница {{ page }}</span>
+            {% if has_next %}
+                <a class="button subtle" href="/?sort={{ sort }}&page={{ page + 1 }}">Дальше →</a>
+            {% endif %}
+        </nav>
+    {% endif %}
+</section>
+{% endblock %}

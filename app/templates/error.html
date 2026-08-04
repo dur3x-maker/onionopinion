@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="error-page card">
+    <p class="error-code">{{ status_code }}</p>
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <a class="button subtle" href="/">Вернуться в ленту</a>
+</section>
+{% endblock %}
+

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="auth-card card">
+    <p class="eyebrow">Без личных данных</p>
+    <h1>Регистрация</h1>
+    <p>Никакой почты и телефона. Запомните пароль: восстановление пока недоступно.</p>
+    {% if error %}<div class="form-error" role="alert">{{ error }}</div>{% endif %}
+    <form action="/register" method="post" class="stacked-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>
+            Логин <small>не показывается публично</small>
+            <input name="login" value="{{ login|default('') }}" minlength="3" maxlength="32"
+                   pattern="[a-zA-Z0-9_.-]+" autocomplete="username" required>
+        </label>
+        <label>
+            Отображаемое имя
+            <input name="display_name" value="{{ display_name|default('') }}" minlength="2"
+                   maxlength="40" autocomplete="nickname" required>
+        </label>
+        <label>
+            Пароль
+            <input type="password" name="password" minlength="10" maxlength="128"
+                   autocomplete="new-password" required>
+        </label>
+        <label>
+            Повторите пароль
+            <input type="password" name="password_confirmation" minlength="10" maxlength="128"
+                   autocomplete="new-password" required>
+        </label>
+        <button type="submit" class="button primary">Создать аккаунт</button>
+    </form>
+</section>
+{% endblock %}
+

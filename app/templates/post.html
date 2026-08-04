@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_comments.html" import comment_branch with context %}
+
+{% block content %}
+<div class="back-link"><a href="/">← Вернуться в ленту</a></div>
+{% include "_post_card.html" %}
+
+<section class="discussion">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Ветка обсуждения</p>
+            <h1>Комментарии <span class="count">{{ comment_count }}</span></h1>
+        </div>
+    </div>
+
+    {% if not post.is_deleted %}
+    <form action="/posts/{{ post.id }}/comments" method="post" class="card comment-composer">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="comment-body">Присоединиться к разговору</label>
+        <textarea id="comment-body" name="body" maxlength="{{ comment_max_length }}" rows="4" required
+                  placeholder="Напишите комментарий…"></textarea>
+        <div class="composer-footer">
+            <span class="identity-note">
+                {% if current_user %}
+                    от <strong>{{ current_user.display_name }}</strong>
+                {% else %}
+                    как <strong>{{ anonymous_alias }}</strong>
+                {% endif %}
+            </span>
+            <button type="submit" class="button primary">Комментировать</button>
+        </div>
+    </form>
+    {% else %}
+        <div class="notice muted-notice">Пост удалён. Существующая ветка сохранена только для целостности обсуждения.</div>
+    {% endif %}
+
+    {% if comment_tree %}
+        <div class="comments" aria-label="Комментарии">
+            {% for node in comment_tree %}
+                {{ comment_branch(node) }}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p>Ответов ещё нет. Начните обсуждение.</p>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
