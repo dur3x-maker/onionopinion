@@ -1,7 +1,14 @@
-# OpinionOnion
+# OnionOpinion
 
 Небольшая privacy-first платформа для анонимных и псевдонимных текстовых
 обсуждений. Все страницы рендерятся сервером и полностью работают без JavaScript.
+
+Официальный clearnet-адрес: <https://onionopinion.my>.
+
+Текущее состояние: приложение, PostgreSQL-миграции, прозрачная модерация,
+аватары и production hardening готовы к отдельному deployment-этапу. Сам
+deployment, DNS, TLS, reverse proxy и Onion Service в этом репозитории не
+выполняются.
 
 ## Быстрый запуск
 
@@ -16,6 +23,7 @@ docker compose up --build
 Сайт доступен на <http://127.0.0.1:8000>. Alembic-миграции применяются
 автоматически при старте контейнера.
 Host-порт можно изменить через `APP_PORT`, не меняя Compose-файл.
+Файл `.env` содержит секреты и не должен попадать в Git.
 
 Проверка:
 
@@ -149,18 +157,18 @@ uvicorn app.main:app --reload --no-access-log
 | `DATABASE_URL` | PostgreSQL URL с отдельным сильным паролем, без default credentials |
 | `POSTGRES_PASSWORD` | тот же сильный пароль для текущего Compose-варианта |
 | `COOKIE_SECURE` | `true` в production; cookie также HttpOnly и SameSite=Lax |
-| `ALLOWED_HOSTS` | все реальные clearnet/onion hostnames через запятую, без `*` |
+| `ALLOWED_HOSTS` | минимум `onionopinion.my`; позднее реальный onion hostname, без `*` |
 | `ADMIN_ALLOWED_NETWORKS` | production admin IP/CIDR, если сетевой барьер включён |
 | `TRUSTED_PROXY_NETWORKS` | только фактические сети reverse proxy |
 | `AVATAR_STORAGE_DIR` | постоянный writable-каталог; в Compose это `/data/avatars` |
-| `OFFICIAL_CLEARNET_URL` | реальный официальный HTTPS URL либо пусто |
+| `OFFICIAL_CLEARNET_URL` | `https://onionopinion.my` |
 | `OFFICIAL_ONION_URL` | реальный v3 `.onion` HTTP(S) URL либо пусто |
 
 Дополнительно доступны `AVATAR_MAX_BYTES`, `ALLOWED_HOSTS`, лимиты текста и rate
 limit из `app/config.py`. Ненастроенные официальные адреса не заменяются фиктивными;
 страница `/addresses` показывает только значения окружения.
 
-Предполагаемая следующая схема — две точки входа (clearnet и Onion Service) через
+Следующая схема — две точки входа (clearnet и Onion Service) через
 reverse proxy к **одному** backend и **одной** PostgreSQL. Отдельные users/content DB
 не нужны. Tor, nginx, TLS и `.onion` этим репозиторием сейчас не устанавливаются.
 
@@ -240,3 +248,10 @@ tests/            integration and security regression tests
   всё равно должен быть ограничен доверенными операторами.
 - Production reverse proxy/Tor hardening, TLS, backups и `.onion` deployment —
   отдельный следующий инфраструктурный этап.
+
+## Лицензия
+
+LICENSE пока отсутствует. Публикация репозитория сама по себе не делает код open
+source: до выбора лицензии сохраняются все авторские права. Перед объявлением
+проекта open source владелец должен отдельно выбрать и добавить подходящую
+лицензию.

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "Opinion Onion"
+    app_name: str = "OnionOpinion"
     environment: Literal["development", "test", "production"] = "development"
     database_url: str = "postgresql+psycopg://opinion:opinion@db:5432/opinion"
     secret_key: str = Field(min_length=32)

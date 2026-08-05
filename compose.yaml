@@ -1,19 +1,21 @@
+name: onionopinion
+
 services:
   app:
     build: .
     restart: unless-stopped
     environment:
-      APP_NAME: ${APP_NAME:-Opinion Onion}
+      APP_NAME: ${APP_NAME:-OnionOpinion}
       ENVIRONMENT: ${ENVIRONMENT:-development}
-      DATABASE_URL: postgresql+psycopg://opinion:${POSTGRES_PASSWORD}@db:5432/opinion
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://opinion:${POSTGRES_PASSWORD}@db:5432/opinion}
       SECRET_KEY: ${SECRET_KEY}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
       ADMIN_ALLOWED_NETWORKS: ${ADMIN_ALLOWED_NETWORKS:-}
       TRUSTED_PROXY_NETWORKS: ${TRUSTED_PROXY_NETWORKS:-}
-      OFFICIAL_CLEARNET_URL: ${OFFICIAL_CLEARNET_URL:-}
+      OFFICIAL_CLEARNET_URL: ${OFFICIAL_CLEARNET_URL:-https://onionopinion.my}
       OFFICIAL_ONION_URL: ${OFFICIAL_ONION_URL:-}
-      AVATAR_STORAGE_DIR: /data/avatars
+      AVATAR_STORAGE_DIR: ${AVATAR_STORAGE_DIR:-/data/avatars}
     ports:
       - "127.0.0.1:${APP_PORT:-8000}:8000"
     depends_on:
@@ -48,5 +50,8 @@ services:
       retries: 10
 
 volumes:
+  # Preserve the established data-volume names across the project rename.
   postgres_data:
+    name: opiniononion_postgres_data
   avatar_data:
+    name: opiniononion_avatar_data

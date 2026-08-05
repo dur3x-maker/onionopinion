@@ -1,2 +1,1 @@
-"""Opinion Onion application package."""
-
+"""OnionOpinion application package."""

@@ -1,6 +1,7 @@
 import html
 import re
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -492,7 +493,7 @@ def test_trusted_proxy_without_forwarded_chain_fails_closed(
         {"secret_key": "test-secret-key-that-is-at-least-32-characters"},
         {"cookie_secure": False},
         {"allowed_hosts": "localhost"},
-        {"allowed_hosts": "*.opinion.example"},
+        {"allowed_hosts": "*.onionopinion.my"},
         {"database_url": "sqlite+pysqlite:///production.db"},
         {"database_url": "postgresql+psycopg://opinion:opinion@db/opinion"},
         {"database_url": "postgresql+psycopg://opinion:@db/opinion"},
@@ -505,7 +506,7 @@ def test_production_configuration_rejects_unsafe_defaults(override):
         "environment": "production",
         "secret_key": "A9s!production-secret-with-many-random-characters-2026",
         "cookie_secure": True,
-        "allowed_hosts": "opinion.example",
+        "allowed_hosts": "onionopinion.my",
         "database_url": "postgresql+psycopg://opinion:strong-random-password@db/opinion",
     }
     values.update(override)
@@ -518,7 +519,7 @@ def test_valid_production_configuration_enables_hsts_and_secure_cookie(tmp_path)
         environment="production",
         secret_key="A9s!production-secret-with-many-random-characters-2026",
         cookie_secure=True,
-        allowed_hosts="opinion.example",
+        allowed_hosts="onionopinion.my",
         database_url=(
             "postgresql+psycopg://opinion:"
             "strong-random-password@db/opinion"
@@ -526,7 +527,7 @@ def test_valid_production_configuration_enables_hsts_and_secure_cookie(tmp_path)
         avatar_storage_dir=tmp_path / "production-avatars",
     )
     app = create_app(settings)
-    with TestClient(app, base_url="https://opinion.example") as production_client:
+    with TestClient(app, base_url="https://onionopinion.my") as production_client:
         response = production_client.get("/missing-page")
     assert response.status_code == 404
     assert response.headers["strict-transport-security"] == "max-age=31536000"
@@ -544,7 +545,7 @@ def test_official_addresses_render_only_configured_safe_values(
         secret_key="test-secret-key-that-is-at-least-32-characters",
         database_url="sqlite+pysqlite:///:memory:",
         allowed_hosts="testserver",
-        official_clearnet_url="https://opinion.example",
+        official_clearnet_url="https://onionopinion.my",
         official_onion_url="http://abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz2345.onion",
         avatar_storage_dir=tmp_path / "official-address-avatars",
     )
@@ -557,7 +558,7 @@ def test_official_addresses_render_only_configured_safe_values(
     app.dependency_overrides[get_db] = override_db
     with TestClient(app) as configured:
         page = configured.get("/addresses")
-        assert "https://opinion.example" in page.text
+        assert "https://onionopinion.my" in page.text
         assert "Onion" in page.text
 
     with pytest.raises(ValidationError):
@@ -569,7 +570,7 @@ def test_official_addresses_render_only_configured_safe_values(
     with pytest.raises(ValidationError):
         Settings(
             secret_key="test-secret-key-that-is-at-least-32-characters",
-            official_clearnet_url="http://opinion.example",
+            official_clearnet_url="http://onionopinion.my",
         )
 
     with pytest.raises(ValidationError):
@@ -577,3 +578,29 @@ def test_official_addresses_render_only_configured_safe_values(
             secret_key="test-secret-key-that-is-at-least-32-characters",
             official_onion_url="http://short.onion",
         )
+
+
+def test_onionopinion_brand_is_rendered_in_main_public_pages(client):
+    pages = ["/", "/login", "/register", "/rules", "/addresses", "/missing-page"]
+    for path in pages:
+        response = client.get(path)
+        assert "OnionOpinion" in response.text
+        assert "OpinionOnion" not in response.text
+        assert "Opinion Onion" not in response.text
+
+    home = client.get("/")
+    assert re.search(r"<title>[^<]+ — OnionOpinion</title>", home.text)
+    assert '<span>OnionOpinion</span>' in home.text
+
+
+def test_public_repository_environment_example_uses_safe_values():
+    env_example = (
+        Path(__file__).resolve().parents[1] / ".env.example"
+    ).read_text(encoding="utf-8")
+
+    assert "APP_NAME=OnionOpinion" in env_example
+    assert "OFFICIAL_CLEARNET_URL=https://onionopinion.my" in env_example
+    assert "ALLOWED_HOSTS=onionopinion.my" in env_example
+    assert "SECRET_KEY=replace-with-at-least-32-random-characters" in env_example
+    assert "POSTGRES_PASSWORD=replace-with-a-long-random-password" in env_example
+    assert "PRIVATE KEY" not in env_example
