@@ -185,6 +185,14 @@ def test_supported_avatars_are_reencoded_to_clean_webp(
         (image_bytes("PNG"), "avatar.jpg", "image/jpeg"),
         (image_bytes("PNG"), "avatar.png", "application/octet-stream"),
         (b"\x89PNG\r\n\x1a\nbroken", "avatar.png", "image/png"),
+        (
+            base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mNk"
+                "YPj/n4GBgYGJAQoAHgQCAf2Dl1EAAAAASUVORK5CYII="
+            ),
+            "avatar.png",
+            "image/png",
+        ),
     ],
 )
 def test_invalid_avatar_inputs_are_rejected(

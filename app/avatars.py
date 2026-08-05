@@ -55,6 +55,7 @@ def process_avatar(upload: UploadFile, settings: Settings) -> str:
         Image.DecompressionBombWarning,
         UnidentifiedImageError,
         OSError,
+        SyntaxError,
         ValueError,
     ) as exc:
         raise HTTPException(
