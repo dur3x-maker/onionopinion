@@ -125,8 +125,10 @@ TRUSTED_PROXY_NETWORKS=172.20.0.0/24
 CIDR. Отказ по сети возвращает нейтральный 404 и не публикует конфигурацию.
 
 Uvicorn запущен с `--no-proxy-headers`. Приложение игнорирует `Forwarded`,
-`X-Real-IP` и `X-Forwarded-For` от недоверенного TCP peer. Для peer из
-`TRUSTED_PROXY_NETWORKS` разбирается только `X-Forwarded-For`: доверенные proxy hops
+`X-Real-IP`, `X-Forwarded-For` и `X-Forwarded-Proto` от недоверенного TCP peer.
+Для peer из `TRUSTED_PROXY_NETWORKS` валидный `X-Forwarded-Proto` задаёт ASGI-схему
+для корректной генерации абсолютных URL. `X-Forwarded-For` разбирается отдельно:
+доверенные proxy hops
 снимаются справа, а ближайший оставшийся адрес считается клиентом. Все реальные
 proxy hops должны быть перечислены; отсутствующая или некорректная цепочка
 отклоняется. Сети `/0` запрещены, чтобы клиент не мог объявить себя доверенным proxy.
@@ -167,6 +169,15 @@ uvicorn app.main:app --reload --no-access-log
 Дополнительно доступны `AVATAR_MAX_BYTES`, `ALLOWED_HOSTS`, лимиты текста и rate
 limit из `app/config.py`. Ненастроенные официальные адреса не заменяются фиктивными;
 страница `/addresses` показывает только значения окружения.
+
+Production использует постоянную внешнюю Docker-сеть с предсказуемым адресом
+gateway для `TRUSTED_PROXY_NETWORKS`. Она создаётся один раз, после чего Compose
+всегда запускается с production override:
+
+```bash
+docker network create --driver bridge --subnet 172.30.0.0/24 onionopinion_internal
+docker compose -f compose.yaml -f compose.production.yaml up -d --build
+```
 
 Следующая схема — две точки входа (clearnet и Onion Service) через
 reverse proxy к **одному** backend и **одной** PostgreSQL. Отдельные users/content DB
