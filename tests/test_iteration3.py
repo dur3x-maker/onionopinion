@@ -488,6 +488,104 @@ def test_trusted_proxy_without_forwarded_chain_fails_closed(
 
 
 @pytest.mark.parametrize(
+    ("host", "forwarded_proto", "expected_href"),
+    [
+        (
+            "onionopinion.my",
+            "https",
+            "https://onionopinion.my/static/app.css",
+        ),
+        (
+            "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz2345.onion",
+            "http",
+            "http://abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz2345.onion/static/app.css",
+        ),
+    ],
+)
+def test_trusted_proxy_scheme_generates_same_origin_stylesheet_url(
+    db_session_factory,
+    tmp_path,
+    host,
+    forwarded_proto,
+    expected_href,
+):
+    settings = Settings(
+        secret_key="test-secret-key-that-is-at-least-32-characters",
+        database_url="sqlite+pysqlite:///:memory:",
+        allowed_hosts=host,
+        trusted_proxy_networks="10.0.0.0/8",
+        avatar_storage_dir=tmp_path / f"forwarded-proto-{forwarded_proto}",
+        rate_limit_count=100,
+    )
+    app = create_app(settings)
+
+    def override_db():
+        with db_session_factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+    with TestClient(
+        app,
+        base_url=f"http://{host}",
+        client=("10.1.2.3", 50000),
+    ) as proxy_client:
+        response = proxy_client.get(
+            "/",
+            headers={"x-forwarded-proto": forwarded_proto},
+        )
+        stylesheet = proxy_client.get(
+            "/static/app.css",
+            headers={"x-forwarded-proto": forwarded_proto},
+        )
+
+    assert response.status_code == 200
+    assert f'href="{expected_href}"' in response.text
+    assert stylesheet.status_code == 200
+    assert stylesheet.headers["content-type"].startswith("text/css")
+    csp = response.headers["content-security-policy"]
+    assert "style-src 'self'" in csp
+    assert "'unsafe-inline'" not in csp
+    assert " http:" not in csp
+    assert " *" not in csp
+
+
+@pytest.mark.parametrize("forwarded_proto", ["https", "http, https", "javascript"])
+def test_untrusted_or_invalid_forwarded_proto_cannot_change_url_scheme(
+    db_session_factory,
+    tmp_path,
+    forwarded_proto,
+):
+    settings = Settings(
+        secret_key="test-secret-key-that-is-at-least-32-characters",
+        database_url="sqlite+pysqlite:///:memory:",
+        allowed_hosts="onionopinion.my",
+        trusted_proxy_networks="10.0.0.0/8",
+        avatar_storage_dir=tmp_path / re.sub(r"[^a-zA-Z0-9]", "_", forwarded_proto),
+        rate_limit_count=100,
+    )
+    app = create_app(settings)
+
+    def override_db():
+        with db_session_factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+    peer = "198.51.100.20" if forwarded_proto == "https" else "10.1.2.3"
+    with TestClient(
+        app,
+        base_url="http://onionopinion.my",
+        client=(peer, 50000),
+    ) as proxy_client:
+        response = proxy_client.get(
+            "/",
+            headers={"x-forwarded-proto": forwarded_proto},
+        )
+
+    assert response.status_code == 200
+    assert 'href="http://onionopinion.my/static/app.css"' in response.text
+
+
+@pytest.mark.parametrize(
     "override",
     [
         {"secret_key": "test-secret-key-that-is-at-least-32-characters"},

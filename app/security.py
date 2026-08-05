@@ -6,6 +6,8 @@ import re
 import secrets
 import time
 from collections import defaultdict, deque
+from collections.abc import Sequence
+from ipaddress import IPv4Network, IPv6Network
 from threading import Lock
 
 from argon2 import PasswordHasher
@@ -14,6 +16,63 @@ from fastapi import HTTPException, Request, status
 
 _password_hasher = PasswordHasher()
 _login_pattern = re.compile(r"^[a-zA-Z0-9_.-]+$")
+
+
+def is_trusted_proxy_peer(
+    peer_host: str,
+    trusted_networks: Sequence[IPv4Network | IPv6Network],
+) -> bool:
+    try:
+        peer = ipaddress.ip_address(peer_host)
+    except ValueError:
+        return False
+    return any(peer in network for network in trusted_networks)
+
+
+class TrustedForwardedProtoMiddleware:
+    """Apply a proxy-provided scheme only when the direct peer is trusted."""
+
+    def __init__(
+        self,
+        app,
+        *,
+        trusted_proxy_networks: Sequence[IPv4Network | IPv6Network],
+    ) -> None:
+        self.app = app
+        self.trusted_proxy_networks = trusted_proxy_networks
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] not in {"http", "websocket"}:
+            await self.app(scope, receive, send)
+            return
+
+        client = scope.get("client")
+        peer_host = client[0] if client else ""
+        if not is_trusted_proxy_peer(peer_host, self.trusted_proxy_networks):
+            await self.app(scope, receive, send)
+            return
+
+        forwarded_values = [
+            value
+            for name, value in scope.get("headers", [])
+            if name.lower() == b"x-forwarded-proto"
+        ]
+        if len(forwarded_values) != 1:
+            await self.app(scope, receive, send)
+            return
+
+        forwarded_proto = forwarded_values[0].decode("latin-1").strip().lower()
+        if forwarded_proto not in {"http", "https"}:
+            await self.app(scope, receive, send)
+            return
+
+        forwarded_scope = dict(scope)
+        forwarded_scope["scheme"] = (
+            forwarded_proto
+            if scope["type"] == "http"
+            else {"http": "ws", "https": "wss"}[forwarded_proto]
+        )
+        await self.app(forwarded_scope, receive, send)
 
 
 def hash_password(password: str) -> str:
@@ -108,7 +167,7 @@ def resolve_client_address(request: Request):
         return None
 
     trusted = request.app.state.settings.trusted_proxy_networks_list
-    if not any(peer in network for network in trusted):
+    if not is_trusted_proxy_peer(peer_host, trusted):
         return peer
 
     forwarded = request.headers.get("x-forwarded-for")

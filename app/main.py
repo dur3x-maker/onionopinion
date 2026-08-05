@@ -15,6 +15,7 @@ from starlette.templating import Jinja2Templates
 from app.config import Settings, get_settings
 from app.security import (
     SessionRateLimiter,
+    TrustedForwardedProtoMiddleware,
     get_anonymous_alias,
     get_anonymous_avatar,
     get_csrf_token,
@@ -142,6 +143,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         RequestBodyLimitMiddleware,
         regular_limit=64 * 1024,
         multipart_limit=settings.avatar_max_bytes + 256 * 1024,
+    )
+    app.add_middleware(
+        TrustedForwardedProtoMiddleware,
+        trusted_proxy_networks=settings.trusted_proxy_networks_list,
     )
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     app.mount(
